@@ -44,25 +44,28 @@ config.json:
     "avoid_toll": true,
     "avoid_subscription_road": true,
     "avoid_ferry": true,
-    "bidirectional": true
+    "bidirectional": true,
+    "sleep": 500
 }
 ```
 
-`region` may be:
- - `us` for the United States
- - `il` for Israel
- - `row`, this is the default value
+- `region` may be:
+  - `us` for the United States
+  - `il` for Israel
+  - `row`, this is the default value
 
-`vehicle` may be:
- - empty (`""`), it is a regular car. This is the default value if not defined
- - `taxi`
- - `motorcycle`
+- `vehicle` may be:
+  - empty (`""`), it is a regular car. This is the default value if not defined
+  - `taxi`
+  - `motorcycle`
 
-`avoid_toll`, `avoid_subscription_road` and `avoid_ferry` are booleans. Their default value is `false`.
+- `avoid_toll`, `avoid_subscription_road` and `avoid_ferry` are booleans. Their default value is `false`.
 
-`bidirectional` is a boolean. Its default value is `true`
+- `bidirectional` is a boolean. Its default value is `true`
 
-`listen` is `:9091` if unset, so you may configure in your scrape config if Prometheus is running on the same server:
+- `sleep` is an integer. It represents the number of milliseconds to wait between two calls to Waze API. Its default value is 500ms.
+
+- `listen` is `:9091` if unset, so you may configure in your scrape config if Prometheus is running on the same server:
 ```
 - job_name: prometheus-waze-exporter
   scrape_timeout: 1m

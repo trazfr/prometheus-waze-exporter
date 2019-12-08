@@ -209,8 +209,12 @@ var unmarshalRegionMap = map[string]Region{
 	"ROW": ROW,
 }
 
+func (s Region) String() string {
+	return marshalRegionMap[s]
+}
+
 func (s Region) MarshalJSON() ([]byte, error) {
-	return json.Marshal(marshalRegionMap[s])
+	return json.Marshal(s.String())
 }
 
 func (s *Region) UnmarshalJSON(b []byte) error {
@@ -250,8 +254,12 @@ var unmarshalVehicleMap = map[string]Vehicle{
 	"MOTORCYCLE": Motorcycle,
 }
 
+func (s Vehicle) String() string {
+	return marshalVehicleMap[s]
+}
+
 func (s Vehicle) MarshalJSON() ([]byte, error) {
-	return json.Marshal(marshalVehicleMap[s])
+	return json.Marshal(s.String())
 }
 
 func (s *Vehicle) UnmarshalJSON(b []byte) error {
