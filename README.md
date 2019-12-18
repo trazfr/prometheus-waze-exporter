@@ -1,4 +1,5 @@
 # prometheus-waze-exporter
+
 Simple Prometheus exporter to monitor the travel distance and duration thanks to Waze API
 
 ## Purpose
@@ -18,8 +19,8 @@ go install github.com/trazfr/prometheus-waze-exporter
 
 It performs a query to Waze to compute 2 main metrics:
 
- - `waze_travel_distance_meters`
- - `waze_travel_time_seconds`
+- `waze_travel_distance_meters`
+- `waze_travel_time_seconds`
 
 It needs a configuration file to define which travel should be monitored.
 
@@ -28,23 +29,34 @@ To run it, just `prometheus-waze-exporter config.json`
 ### Example of configuration file
 
 config.json:
+
 ```json
 {
-    "from": {
-        "name": "paris",
-        "address": "55 Rue du Faubourg Saint-Honoré, Paris, France"
+    "addresses": {
+        "paris": "55 Rue du Faubourg Saint-Honoré, Paris, France",
+        "versailles": "Place d'Armes, Versailles, France",
+        "holidays": "Bormes-les-Mimosas, France"
     },
-    "to": {
-        "name": "versailles",
-        "address": "Place d'Armes, Versailles, France"
-    },
+    "paths": [
+        {
+            "from": "paris",
+            "to": "versailles"
+        },
+        {
+            "from": "versailles",
+            "to": "paris"
+        },
+        {
+            "from": "paris",
+            "to": "holidays"
+        }
+    ],
     "listen": ":9091",
     "region": "row",
-    "vehicle": "motorcycle",
+    "vehicle": "taxi",
     "avoid_toll": true,
     "avoid_subscription_road": true,
     "avoid_ferry": true,
-    "bidirectional": true,
     "sleep": 500
 }
 ```
@@ -61,12 +73,11 @@ config.json:
 
 - `avoid_toll`, `avoid_subscription_road` and `avoid_ferry` are booleans. Their default value is `false`.
 
-- `bidirectional` is a boolean. Its default value is `true`
-
 - `sleep` is an integer. It represents the number of milliseconds to wait between two calls to Waze API. Its default value is 500ms.
 
 - `listen` is `:9091` if unset, so you may configure in your scrape config if Prometheus is running on the same server:
-```
+
+```toml
 - job_name: prometheus-waze-exporter
   scrape_timeout: 1m
   scrape_interval: 5m

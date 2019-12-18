@@ -11,19 +11,14 @@ import (
 	"time"
 )
 
-type ConfigPoint struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-}
-
 type WazeParameters struct {
-	From                  ConfigPoint `json:"from"`
-	To                    ConfigPoint `json:"to"`
-	Region                Region      `json:"region"`
-	Vehicle               Vehicle     `json:"vehicle"`
-	AvoidToll             bool        `json:"avoid_toll"`
-	AvoidSubscriptionRoad bool        `json:"avoid_subscription_road"`
-	AvoidFerry            bool        `json:"avoid_ferry"`
+	FromCoordinates       string
+	ToCoordinates         string
+	Region                Region
+	Vehicle               Vehicle
+	AvoidToll             bool
+	AvoidSubscriptionRoad bool
+	AvoidFerry            bool
 }
 
 type WazeRequest struct {
@@ -72,16 +67,9 @@ func CreateRequest(wazeParam WazeParameters, client *http.Client) (*WazeRequest,
 	if !wazeParam.AvoidSubscriptionRoad {
 		param.Set("subscription", "*")
 	}
-	from, err := wazeParam.From.getCoord(wazeParam.Region, client)
-	if err != nil {
-		return nil, err
-	}
-	to, err := wazeParam.To.getCoord(wazeParam.Region, client)
-	if err != nil {
-		return nil, err
-	}
-	param.Set("from", from)
-	param.Set("to", to)
+
+	param.Set("from", wazeParam.FromCoordinates)
+	param.Set("to", wazeParam.ToCoordinates)
 	param.Set("at", "0")
 	param.Set("returnJSON", "true")
 	param.Set("timeout", "60000")
@@ -144,10 +132,10 @@ func (w *WazeRequest) Call() ([]WazeResult, error) {
 	return result, nil
 }
 
-func (c *ConfigPoint) getCoord(region Region, client *http.Client) (string, error) {
-	log.Println("Look for address", c.Address)
+func WazeAddressToQuery(address string, region Region, client *http.Client) (string, error) {
+	log.Println("Look for address", address)
 	param := url.Values{}
-	param.Set("q", c.Address)
+	param.Set("q", address)
 	param.Set("lat", "0")
 	param.Set("lon", "0")
 
@@ -176,13 +164,14 @@ func (c *ConfigPoint) getCoord(region Region, client *http.Client) (string, erro
 	if err := json.NewDecoder(resp.Body).Decode(&decodedResponse); err != nil {
 		return "", err
 	}
-	for _, item := range decodedResponse {
+	for i := range decodedResponse {
+		item := &decodedResponse[i]
 		if item.Name != "" {
 			return fmt.Sprintf("x:%f y:%f", item.Location.Lon, item.Location.Lat), nil
 		}
 	}
 
-	return "", fmt.Errorf("Address not found: %s", c.Address)
+	return "", fmt.Errorf("Address not found: %s", address)
 }
 
 ////////////////////////////////////////////////////////////////////////////////

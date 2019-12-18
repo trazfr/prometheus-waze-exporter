@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -22,7 +21,6 @@ type wazeMetric struct {
 }
 
 type context struct {
-	bidir          bool
 	sleepTime      time.Duration
 	listen         string
 	wazeMetrics    []*wazeMetric
@@ -56,7 +54,7 @@ var (
 		Namespace: namespace,
 		Name:      "parameters",
 		Help:      "Waze parameters",
-	}, []string{"from", "to", "region", "sleep", "vehicle", "avoid_toll", "avoid_subscription_road", "avoid_ferry", "bidirectional"})
+	}, []string{"region", "sleep", "vehicle", "avoid_toll", "avoid_subscription_road", "avoid_ferry"})
 	promWazeTimeSpent = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "time_seconds",
@@ -106,7 +104,7 @@ func (w *wazeMetric) collect(ch chan<- prometheus.Metric) (time.Duration, error)
 	duration := time.Now().Sub(begin)
 	if err != nil {
 		// dont change the values
-		log.Println(w.wazeParameters.From.Name, w.wazeParameters.To.Name, err)
+		log.Println("Error", w.timeTravelTime.Desc().String(), err)
 	} else if len(result) > 0 {
 		w.timeTravelDistance.Set(float64(result[0].Distance))
 		w.timeTravelTime.Set(math.Round(result[0].Duration.Seconds()))
@@ -116,68 +114,74 @@ func (w *wazeMetric) collect(ch chan<- prometheus.Metric) (time.Duration, error)
 	return duration, err
 }
 
-func createWazeMetrics(wazeParameters WazeParameters, client *http.Client, switchDirection bool) *wazeMetric {
-	var err error
-	r := &wazeMetric{
-		wazeParameters: wazeParameters,
+func createWazeCoordinates(addresses map[string]string, region Region, client *http.Client) map[string]string {
+	result := map[string]string{}
+	for name, address := range addresses {
+		coordinates, err := WazeAddressToQuery(address, region, client)
+		log.Println("Address", address, "has been found at", coordinates)
+		if err != nil {
+			log.Fatalln("Failed to retrieve the address", address, err)
+		}
+		result[name] = coordinates
 	}
-	if switchDirection {
-		r.wazeParameters.From, r.wazeParameters.To = wazeParameters.To, wazeParameters.From
-	}
-
-	log.Println("Create metrics from", r.wazeParameters.From.Name, "to", r.wazeParameters.To.Name)
-	r.timeTravelDistance = promWazeTravelDistance.WithLabelValues(r.wazeParameters.From.Name, r.wazeParameters.To.Name)
-	r.timeTravelTime = promWazeTravelTime.WithLabelValues(r.wazeParameters.From.Name, r.wazeParameters.To.Name)
-	r.wazeRequest, err = CreateRequest(r.wazeParameters, client)
-
-	if err != nil {
-		log.Fatalln(err)
-	}
-	return r
+	return result
 }
 
 func getContext(filename string, client *http.Client) context {
-	fd, err := os.Open(filename)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	jsonConfig := struct {
-		WazeParameters
-		Bidirectional bool   `json:"bidirectional"`
-		Listen        string `json:"listen"`
-		Sleep         int64  `json:"sleep"`
-	}{
-		Bidirectional: true,
-		Listen:        ":9091",
-		Sleep:         500,
-	}
-	if err := json.NewDecoder(fd).Decode(&jsonConfig); err != nil {
-		log.Fatalln(err)
-	}
+	jsonConfig := NewConfig(filename)
 
 	context := context{
-		bidir:         jsonConfig.Bidirectional,
 		sleepTime:     time.Millisecond * time.Duration(jsonConfig.Sleep),
 		listen:        jsonConfig.Listen,
-		wazeMetrics:   []*wazeMetric{createWazeMetrics(jsonConfig.WazeParameters, client, false)},
 		wazeTimeSpent: promWazeTimeSpent,
 		wazeCallsOk:   promWazeCalls.WithLabelValues("ok"),
 		wazeCallsKo:   promWazeCalls.WithLabelValues("ko"),
-		wazeParameters: promWazeParams.WithLabelValues(jsonConfig.From.Name,
-			jsonConfig.To.Name,
+		wazeParameters: promWazeParams.WithLabelValues(
 			jsonConfig.Region.String(),
 			strconv.FormatInt(jsonConfig.Sleep, 10),
 			jsonConfig.Vehicle.String(),
 			strconv.FormatBool(jsonConfig.AvoidToll),
 			strconv.FormatBool(jsonConfig.AvoidSubscriptionRoad),
 			strconv.FormatBool(jsonConfig.AvoidFerry),
-			strconv.FormatBool(jsonConfig.Bidirectional),
 		),
 	}
-	context.wazeParameters.Inc()
-	if jsonConfig.Bidirectional {
-		context.wazeMetrics = append(context.wazeMetrics, createWazeMetrics(jsonConfig.WazeParameters, client, true))
+
+	log.Println("Look for", len(jsonConfig.Addresses), "addresses")
+	coordinates := createWazeCoordinates(jsonConfig.Addresses, jsonConfig.Region, client)
+
+	log.Println("Create", len(jsonConfig.Paths), "paths")
+	for _, path := range jsonConfig.Paths {
+		fromCoordinates, fromFound := coordinates[path.From]
+		if !fromFound {
+			log.Fatalln("Address not found:", path.From)
+		}
+		toCoordinates, toFound := coordinates[path.To]
+		if !toFound {
+			log.Fatalln("Address not found:", path.To)
+		}
+
+		wazeMetric := &wazeMetric{
+			wazeParameters: WazeParameters{
+				FromCoordinates:       fromCoordinates,
+				ToCoordinates:         toCoordinates,
+				Region:                jsonConfig.Region,
+				Vehicle:               jsonConfig.Vehicle,
+				AvoidToll:             jsonConfig.AvoidToll,
+				AvoidSubscriptionRoad: jsonConfig.AvoidSubscriptionRoad,
+				AvoidFerry:            jsonConfig.AvoidFerry,
+			},
+			timeTravelTime:     promWazeTravelTime.WithLabelValues(path.From, path.To),
+			timeTravelDistance: promWazeTravelDistance.WithLabelValues(path.From, path.To),
+		}
+		var err error
+		wazeMetric.wazeRequest, err = CreateRequest(wazeMetric.wazeParameters, client)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		context.wazeMetrics = append(context.wazeMetrics, wazeMetric)
 	}
+
+	context.wazeParameters.Inc()
 	return context
 }
 
