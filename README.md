@@ -11,8 +11,7 @@ It has been made to monitor when is the best time to commute to avoid traffic ja
 Having a working [Golang](https://golang.org/) environment:
 
 ```bash
-go get github.com/trazfr/prometheus-waze-exporter
-go install github.com/trazfr/prometheus-waze-exporter
+go install github.com/trazfr/prometheus-waze-exporter@latest
 ```
 
 ## Use
